@@ -38,30 +38,42 @@ export default function App() {
     setLoading(false)
   }
 
+  function handleTabChange(tabId) {
+    setActiveTab(tabId)
+  }
+
   const BottomNav = () => (
     <div style={{
-      position:'sticky', bottom:0, background:'#1E0E3E',
+      background:'#1E0E3E',
       borderTop:'1px solid rgba(255,255,255,0.07)',
-      padding:'10px 0 6px', display:'flex',
-      justifyContent:'space-around', zIndex:20
+      padding:'10px 0 6px',
+      display:'flex', justifyContent:'space-around',
+      zIndex:20, flexShrink:0,
     }}>
       {[
         { id:'feed',   icon:'🏠', label:'Feed' },
         { id:'arubot', icon:'🤖', label:'AruBot' },
         { id:'plans',  icon:'💰', label:'Plans' },
       ].map(tab => (
-        <div key={tab.id} onClick={() => setActiveTab(tab.id)}
+        <div
+          key={tab.id}
+          onClick={() => handleTabChange(tab.id)}
+          role="button"
+          tabIndex={0}
+          aria-label={tab.label}
+          aria-current={activeTab === tab.id ? 'page' : undefined}
+          onKeyDown={e => e.key === 'Enter' && handleTabChange(tab.id)}
           style={{
             display:'flex', flexDirection:'column', alignItems:'center',
             gap:2, cursor:'pointer',
-            opacity: activeTab===tab.id ? 1 : 0.35,
-            transition:'opacity 0.15s'
+            opacity: activeTab === tab.id ? 1 : 0.35,
+            transition:'opacity 0.15s', padding:'4px 20px',
           }}>
           <span style={{ fontSize:20 }}>{tab.icon}</span>
           <span style={{
             fontSize:9,
-            color: activeTab===tab.id ? '#12A8B0' : 'rgba(255,255,255,0.4)',
-            fontWeight: activeTab===tab.id ? 700 : 400
+            color: activeTab === tab.id ? '#12A8B0' : 'rgba(255,255,255,0.4)',
+            fontWeight: activeTab === tab.id ? 700 : 400
           }}>{tab.label}</span>
         </div>
       ))}
@@ -69,10 +81,19 @@ export default function App() {
   )
 
   if (loading) return (
-    <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ fontFamily:'Georgia, serif', fontSize:26, fontWeight:900, color:'#FAF3EC', textAlign:'center' }}>
+    <div style={{
+      minHeight:'100vh', background:'#1E0E3E',
+      display:'flex', alignItems:'center', justifyContent:'center'
+    }}>
+      <div style={{
+        fontFamily:'Georgia, serif', fontSize:26,
+        fontWeight:900, color:'#FAF3EC', textAlign:'center'
+      }}>
         arugae
-        <span style={{ display:'block', fontSize:11, fontWeight:400, color:'rgba(255,255,255,0.3)', letterSpacing:'0.12em', marginTop:6 }}>
+        <span style={{
+          display:'block', fontSize:11, fontWeight:400,
+          color:'rgba(255,255,255,0.3)', letterSpacing:'0.12em', marginTop:6
+        }}>
           அருகே
         </span>
       </div>
@@ -84,38 +105,49 @@ export default function App() {
   if (!profile?.conditions?.length)
     return <Condition session={session} onDone={setProfile} />
 
-  // Circle selector — now includes Header + BottomNav
-  if (!activeCircle) return (
-    <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', flexDirection:'column', fontFamily:"'DM Sans', sans-serif" }}>
-      <Header
-        profile={profile}
-        activeCircle={null}
-        onManageCircles={null}
-      />
-      <div style={{ flex:1, overflowY:'auto' }}>
-        <CircleSelector
-          profile={profile}
-          setProfile={setProfile}
-          session={session}
-          onSelect={setActiveCircle}
-        />
-      </div>
-      <BottomNav />
-    </div>
-  )
-
+  // ── MAIN LAYOUT — used for ALL screens after login ──
   return (
-    <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', flexDirection:'column', fontFamily:"'DM Sans', sans-serif" }}>
+    <div style={{
+      height:'100vh', background:'#1E0E3E',
+      display:'flex', flexDirection:'column',
+      fontFamily:"'DM Sans', sans-serif",
+      overflow:'hidden',
+    }}>
       <Header
         profile={profile}
         activeCircle={activeCircle}
         onManageCircles={() => setActiveCircle(null)}
       />
-      <div style={{ flex:1, overflowY:'auto' }}>
-        {activeTab === 'feed'   && <Feed   session={session} profile={profile} activeCircle={activeCircle} />}
-        {activeTab === 'arubot' && <AruBot session={session} profile={profile} />}
-        {activeTab === 'plans'  && <Plans />}
+
+      {/* Scrollable content area */}
+      <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column' }}>
+        {!activeCircle && (
+          <CircleSelector
+            profile={profile}
+            setProfile={setProfile}
+            session={session}
+            onSelect={setActiveCircle}
+          />
+        )}
+
+        {activeCircle && activeTab === 'feed' && (
+          <Feed
+            session={session}
+            profile={profile}
+            activeCircle={activeCircle}
+          />
+        )}
+
+        {activeCircle && activeTab === 'arubot' && (
+          <AruBot session={session} profile={profile} />
+        )}
+
+        {activeCircle && activeTab === 'plans' && (
+          <Plans />
+        )}
       </div>
+
+      {/* Bottom nav — always visible */}
       <BottomNav />
     </div>
   )

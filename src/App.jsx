@@ -5,8 +5,8 @@ import Condition from './screens/Condition'
 import CircleSelector from './screens/CircleSelector'
 import Feed from './screens/Feed'
 import AruBot from './screens/AruBot'
-import Profile from './screens/Profile'
 import Plans from './screens/Plans'
+import Header from './components/Header'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -26,7 +26,7 @@ export default function App() {
       (_event, session) => {
         setSession(session)
         if (session) loadProfile(session.user.id)
-        else { setProfile(null); setLoading(false) }
+        else { setProfile(null); setActiveCircle(null); setLoading(false) }
       }
     )
     return () => subscription.unsubscribe()
@@ -42,41 +42,58 @@ export default function App() {
     setLoading(false)
   }
 
+  // Loading splash
   if (loading) return (
     <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ fontFamily:'Georgia, serif', fontSize:26, fontWeight:900, color:'#FAF3EC', letterSpacing:'-0.02em', textAlign:'center' }}>
+      <div style={{ fontFamily:'Georgia, serif', fontSize:26, fontWeight:900, color:'#FAF3EC', textAlign:'center' }}>
         arugae
         <span style={{ display:'block', fontSize:11, fontWeight:400, color:'rgba(255,255,255,0.3)', letterSpacing:'0.12em', marginTop:6 }}>அருகே</span>
       </div>
     </div>
   )
 
+  // Not logged in
   if (!session) return <SignUp />
 
+  // First time — condition selection
   if (!profile?.conditions?.length)
     return <Condition session={session} onDone={setProfile} />
 
-  if (!activeCircle)
-    return <CircleSelector profile={profile} onSelect={setActiveCircle} />
+  // Circle selector
+  if (!activeCircle) return (
+    <CircleSelector
+      profile={profile}
+      setProfile={setProfile}
+      session={session}
+      onSelect={setActiveCircle}
+      isFirstTime={false}
+    />
+  )
 
-  const sharedProps = { session, profile, activeCircle, setActiveCircle }
-
+  // Main app
   return (
     <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', flexDirection:'column', fontFamily:"'DM Sans', sans-serif" }}>
+
+      {/* Persistent header */}
+      <Header
+        profile={profile}
+        activeCircle={activeCircle}
+        onChangeCircle={() => setActiveCircle(null)}
+      />
+
+      {/* Screen content */}
       <div style={{ flex:1, overflowY:'auto' }}>
-        {activeTab === 'feed'    && <Feed    {...sharedProps} />}
-        {activeTab === 'arubot' && <AruBot  {...sharedProps} />}
-        {activeTab === 'profile' && <Profile {...sharedProps} setProfile={setProfile} />}
-        {activeTab === 'plans'   && <Plans   {...sharedProps} />}
+        {activeTab === 'feed'   && <Feed   session={session} profile={profile} activeCircle={activeCircle} />}
+        {activeTab === 'arubot' && <AruBot session={session} profile={profile} />}
+        {activeTab === 'plans'  && <Plans />}
       </div>
 
-      {/* Bottom nav */}
+      {/* Bottom nav — 3 tabs only */}
       <div style={{ position:'sticky', bottom:0, background:'#1E0E3E', borderTop:'1px solid rgba(255,255,255,0.07)', padding:'10px 0 6px', display:'flex', justifyContent:'space-around', zIndex:20 }}>
         {[
-          { id:'feed',    icon:'🏠', label:'Feed' },
-          { id:'arubot',  icon:'🤖', label:'AruBot' },
-          { id:'profile', icon:'👤', label:'Profile' },
-          { id:'plans',   icon:'💰', label:'Plans' },
+          { id:'feed',   icon:'🏠', label:'Feed' },
+          { id:'arubot', icon:'🤖', label:'AruBot' },
+          { id:'plans',  icon:'💰', label:'Plans' },
         ].map(tab => (
           <div key={tab.id} onClick={() => setActiveTab(tab.id)}
             style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer', opacity: activeTab===tab.id ? 1 : 0.35, transition:'opacity 0.15s' }}>

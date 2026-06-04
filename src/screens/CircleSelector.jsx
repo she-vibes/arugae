@@ -72,7 +72,7 @@ export default function CircleSelector({ profile, onSelect, setProfile, session 
   }
 
   return (
-    <div style={{ padding:'24px 20px', fontFamily:"'DM Sans', sans-serif" }}>
+    <div style={{ padding:'24px 20px 100px', fontFamily:"'DM Sans', sans-serif" }}>
       <div style={{ maxWidth:400, margin:'0 auto' }}>
         <div style={{
           fontFamily:'Georgia, serif', fontSize:28,

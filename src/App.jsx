@@ -59,16 +59,24 @@ export default function App() {
   if (!profile?.conditions?.length)
     return <Condition session={session} onDone={setProfile} />
 
-  // Circle selector
+    // Circle selector — add Header here too
   if (!activeCircle) return (
-    <CircleSelector
-      profile={profile}
-      setProfile={setProfile}
-      session={session}
-      onSelect={setActiveCircle}
-      isFirstTime={false}
-    />
+    <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', flexDirection:'column' }}>
+      <Header
+        profile={profile}
+        activeCircle={null}
+        onChangeCircle={null}
+      />
+      <CircleSelector
+        profile={profile}
+        setProfile={setProfile}
+        session={session}
+        onSelect={setActiveCircle}
+        isFirstTime={false}
+      />
+    </div>
   )
+
 
   // Main app
   return (

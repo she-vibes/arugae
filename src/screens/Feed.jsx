@@ -124,10 +124,11 @@ export default function Feed({ session, profile, activeCircle }) {
 
   return (
     <div style={{
-      minHeight:'calc(100vh - 114px)', background:T.plum,
-      display:'flex', flexDirection:'column',
-      fontFamily:"'DM Sans', sans-serif"
-    }}>
+  flex:1, background:T.plum,
+  display:'flex', flexDirection:'column',
+  fontFamily:"'DM Sans', sans-serif"
+      }}>
+
 
       {/* Circle bar + My Posts toggle */}
       <div style={{

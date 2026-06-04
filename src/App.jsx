@@ -14,6 +14,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('feed')
   const [activeCircle, setActiveCircle] = useState(null)
+  const [managingCircles, setManagingCircles] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -21,7 +22,6 @@ export default function App() {
       if (session) loadProfile(session.user.id)
       else setLoading(false)
     })
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session)
@@ -34,69 +34,54 @@ export default function App() {
 
   async function loadProfile(userId) {
     const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
+      .from('profiles').select('*').eq('id', userId).single()
     setProfile(data)
     setLoading(false)
   }
 
-  // Loading splash
   if (loading) return (
     <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', alignItems:'center', justifyContent:'center' }}>
       <div style={{ fontFamily:'Georgia, serif', fontSize:26, fontWeight:900, color:'#FAF3EC', textAlign:'center' }}>
         arugae
-        <span style={{ display:'block', fontSize:11, fontWeight:400, color:'rgba(255,255,255,0.3)', letterSpacing:'0.12em', marginTop:6 }}>அருகே</span>
+        <span style={{ display:'block', fontSize:11, fontWeight:400, color:'rgba(255,255,255,0.3)', letterSpacing:'0.12em', marginTop:6 }}>
+          அருகே
+        </span>
       </div>
     </div>
   )
 
-  // Not logged in
   if (!session) return <SignUp />
 
-  // First time — condition selection
   if (!profile?.conditions?.length)
     return <Condition session={session} onDone={setProfile} />
 
-    // Circle selector — add Header here too
-  if (!activeCircle) return (
+  // Circle selector / manage circles
+  if (!activeCircle || managingCircles) return (
     <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', flexDirection:'column' }}>
-      <Header
-        profile={profile}
-        activeCircle={null}
-        onChangeCircle={null}
-      />
+      <Header profile={profile} activeCircle={null} onChangeCircle={null} onSwitchCircle={null} />
       <CircleSelector
         profile={profile}
         setProfile={setProfile}
         session={session}
-        onSelect={setActiveCircle}
         isFirstTime={false}
+        onSelect={(circle) => { setActiveCircle(circle); setManagingCircles(false) }}
       />
     </div>
   )
 
-
-  // Main app
   return (
     <div style={{ minHeight:'100vh', background:'#1E0E3E', display:'flex', flexDirection:'column', fontFamily:"'DM Sans', sans-serif" }}>
-
-      {/* Persistent header */}
       <Header
         profile={profile}
         activeCircle={activeCircle}
-        onChangeCircle={() => setActiveCircle(null)}
+        onSwitchCircle={() => setActiveCircle(null)}
+        onChangeCircle={() => { setActiveCircle(null); setManagingCircles(true) }}
       />
-
-      {/* Screen content */}
       <div style={{ flex:1, overflowY:'auto' }}>
         {activeTab === 'feed'   && <Feed   session={session} profile={profile} activeCircle={activeCircle} />}
         {activeTab === 'arubot' && <AruBot session={session} profile={profile} />}
         {activeTab === 'plans'  && <Plans />}
       </div>
-
-      {/* Bottom nav — 3 tabs only */}
       <div style={{ position:'sticky', bottom:0, background:'#1E0E3E', borderTop:'1px solid rgba(255,255,255,0.07)', padding:'10px 0 6px', display:'flex', justifyContent:'space-around', zIndex:20 }}>
         {[
           { id:'feed',   icon:'🏠', label:'Feed' },

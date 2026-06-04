@@ -24,7 +24,7 @@ export default function Feed({ session, profile, activeCircle }) {
   const [myPostsOnly, setMyPostsOnly] = useState(false)
   const [openPost, setOpenPost] = useState(null)
   const circleIdRef = useRef(null)
-
+  const [search, setSearch] = useState('')
   useEffect(() => {
     loadCircleAndPosts()
 
@@ -107,8 +107,6 @@ export default function Feed({ session, profile, activeCircle }) {
     setPosting(false)
   }
 
-  const [search, setSearch] = useState('')
-
   const filtered = posts
   .filter(p => myPostsOnly ? p.author_id === session.user.id : true)
   .filter(p => search.trim()
@@ -164,6 +162,52 @@ export default function Feed({ session, profile, activeCircle }) {
               background: myPostsOnly ? T.ember : 'rgba(255,255,255,0.15)',
               position:'relative', transition:'all 0.2s', cursor:'pointer'
             }}>
+            {/* Search */}
+<div style={{
+  padding:'8px 16px',
+  borderBottom:'1px solid rgba(255,255,255,0.07)',
+  flexShrink:0,
+}}>
+  <div style={{
+    display:'flex', alignItems:'center', gap:8,
+    background:'rgba(255,255,255,0.06)',
+    borderRadius:10, padding:'8px 12px',
+    border:'1px solid rgba(255,255,255,0.1)',
+  }}>
+    <span style={{ fontSize:14, opacity:0.4 }} aria-hidden="true">🔍</span>
+    <input
+      type="search"
+      value={search}
+      onChange={e => setSearch(e.target.value)}
+      placeholder="Search posts..."
+      aria-label="Search posts"
+      style={{
+        flex:1, background:'none', border:'none', outline:'none',
+        color:'white', fontFamily:"'DM Sans', sans-serif",
+        fontSize:13,
+      }}
+    />
+    {search && (
+      <button
+        onClick={() => setSearch('')}
+        aria-label="Clear search"
+        style={{
+          background:'none', border:'none', color:'rgba(255,255,255,0.4)',
+          cursor:'pointer', fontSize:14, padding:0,
+        }}>
+        ✕
+      </button>
+    )}
+  </div>
+  {search && (
+    <div style={{
+      fontSize:11, color:'rgba(255,255,255,0.3)',
+      marginTop:6, paddingLeft:2
+    }}>
+      {filtered.length} result{filtered.length !== 1 ? 's' : ''} for "{search}"
+    </div>
+  )}
+</div>
             <div style={{
               position:'absolute', width:12, height:12, borderRadius:'50%',
               background:'white', top:2, left: myPostsOnly ? 14 : 2, transition:'all 0.2s'

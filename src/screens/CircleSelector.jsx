@@ -195,4 +195,48 @@ export default function CircleSelector({ profile, onSelect, setProfile, session,
           }}>
             <div style={{ fontFamily:'Georgia, serif', fontSize:20, fontWeight:900, color:T.parchment, marginBottom:6 }}>Add Circles</div>
             <p style={{ fontSize:12, color:T.gray, marginBottom:20 }}>Select circles to join</p>
-            <div style={{ display:'flex', flexDirection:'column', gap:8​​​​​​​​​​​​​​​​
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
+              {unenrolled.map(c => {
+                const isAdding = adding.includes(c.id)
+                return (
+                  <div key={c.id} onClick={() => toggleAdding(c.id)} style={{
+                    borderRadius:12, padding:'14px 16px', cursor:'pointer',
+                    border:`1.5px solid ${isAdding ? T.teal : 'rgba(255,255,255,0.08)'}`,
+                    background: isAdding ? `${T.teal}22` : 'rgba(255,255,255,0.04)',
+                    display:'flex', alignItems:'center', gap:12, transition:'all 0.15s',
+                  }}>
+                    <span style={{ fontSize:22 }}>{c.icon}</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:'white' }}>{c.label}</div>
+                      <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)' }}>{c.desc}</div>
+                    </div>
+                    <div style={{
+                      width:20, height:20, borderRadius:'50%',
+                      border:`2px solid ${isAdding ? T.teal : 'rgba(255,255,255,0.2)'}`,
+                      background: isAdding ? T.teal : 'transparent',
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontSize:10, color:'white', transition:'all 0.15s',
+                    }}>
+                      {isAdding ? '✓' : ''}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={saveNewCircles} disabled={!adding.length || saving} style={{
+              width:'100%', padding:'13px',
+              background: adding.length ? T.teal : 'rgba(255,255,255,0.08)',
+              color:'white', border:'none', borderRadius:10,
+              fontSize:14, fontWeight:700,
+              cursor: adding.length ? 'pointer' : 'default',
+              fontFamily:"'DM Sans', sans-serif",
+              opacity: adding.length ? 1 : 0.5,
+            }}>
+              {saving ? 'Saving...' : adding.length ? `Add ${adding.length} Circle${adding.length > 1 ? 's' : ''} →` : 'Select circles'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

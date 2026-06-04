@@ -131,7 +131,7 @@ export default function PostThread({ post, session, profile, onBack }) {
 
   return (
     <div style={{
-      minHeight:'calc(100vh - 114px)', background:T.plum,
+      flex:1,background:T.plum,
       display:'flex', flexDirection:'column',
       fontFamily:"'DM Sans', sans-serif"
     }}>

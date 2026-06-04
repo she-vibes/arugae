@@ -107,9 +107,14 @@ export default function Feed({ session, profile, activeCircle }) {
     setPosting(false)
   }
 
-  const filtered = myPostsOnly
-    ? posts.filter(p => p.author_id === session.user.id)
-    : posts
+  const [search, setSearch] = useState('')
+
+  const filtered = posts
+  .filter(p => myPostsOnly ? p.author_id === session.user.id : true)
+  .filter(p => search.trim()
+    ? p.content.toLowerCase().includes(search.toLowerCase())
+    : true
+  )
 
   if (openPost) {
     return (

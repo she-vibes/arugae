@@ -134,16 +134,5 @@ export default function Feed({ session, profile }) {
           </div>
         ))}
       </div>
-
-      {/* Bottom nav */}
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, background:T.plum, borderTop:'1px solid rgba(255,255,255,0.07)', padding:'10px 0 6px', display:'flex', justifyContent:'space-around' }}>
-        {[['🏠','Feed',true],['🤖','AruBot',false],['👤','Profile',false],['💰','Plans',false]].map(([icon,label,active],i) => (
-          <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, opacity:active?1:0.35 }}>
-            <span style={{ fontSize:18 }}>{icon}</span>
-            <span style={{ fontSize:9, color:active?T.tealLt:'rgba(255,255,255,0.4)', fontWeight:active?700:400 }}>{label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   )
 }

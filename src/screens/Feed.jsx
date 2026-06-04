@@ -22,10 +22,15 @@ export default function Feed({ session, profile, activeCircle }) {
   const [anon, setAnon] = useState(false)
   const [posting, setPosting] = useState(false)
   const [myPostsOnly, setMyPostsOnly] = useState(false)
+  const [search, setSearch] = useState('')
   const [openPost, setOpenPost] = useState(null)
   const circleIdRef = useRef(null)
-  const [search, setSearch] = useState('')
+
   useEffect(() => {
+    setPosts([])
+    setReplyCounts({})
+    setSearch('')
+    setMyPostsOnly(false)
     loadCircleAndPosts()
 
     const channel = supabase
@@ -33,6 +38,8 @@ export default function Feed({ session, profile, activeCircle }) {
       .on('postgres_changes',
         { event:'INSERT', schema:'public', table:'posts' },
         async payload => {
+          // Only add if belongs to current circle
+          if (circleIdRef.current && payload.new.circle_id !== circleIdRef.current) return
           const { data } = await supabase
             .from('posts')
             .select('*, circles(name, icon), profiles(display_name, avatar_color)')
@@ -56,27 +63,31 @@ export default function Feed({ session, profile, activeCircle }) {
   }, [activeCircle])
 
   async function loadCircleAndPosts() {
+    // Always resolve circle ID from slug
     let circleId = null
     if (activeCircle?.id) {
       const { data: circleRow } = await supabase
-        .from('circles').select('id').eq('slug', activeCircle.id).single()
+        .from('circles')
+        .select('id')
+        .eq('slug', activeCircle.id)
+        .single()
       if (circleRow) {
         circleId = circleRow.id
         circleIdRef.current = circleId
       }
     }
 
-    let query = supabase
+    if (!circleId) return // Don't load posts without a valid circle
+
+    const { data } = await supabase
       .from('posts')
       .select('*, circles(name, icon), profiles(display_name, avatar_color)')
+      .eq('circle_id', circleId)   // strictly filtered to this circle
       .order('created_at', { ascending:false })
       .limit(30)
-    if (circleId) query = query.eq('circle_id', circleId)
 
-    const { data } = await query
     if (data) {
       setPosts(data)
-      // Fetch reply counts
       const ids = data.map(p => p.id)
       if (ids.length) {
         const { data: comments } = await supabase
@@ -99,7 +110,7 @@ export default function Feed({ session, profile, activeCircle }) {
     setPosting(true)
     await supabase.from('posts').insert({
       author_id: anon ? null : session.user.id,
-      circle_id: circleIdRef.current || 1,
+      circle_id: circleIdRef.current,
       content: text.trim(),
       is_anonymous: anon,
     })
@@ -107,12 +118,13 @@ export default function Feed({ session, profile, activeCircle }) {
     setPosting(false)
   }
 
+  // Apply filters
   const filtered = posts
-  .filter(p => myPostsOnly ? p.author_id === session.user.id : true)
-  .filter(p => search.trim()
-    ? p.content.toLowerCase().includes(search.toLowerCase())
-    : true
-  )
+    .filter(p => myPostsOnly ? p.author_id === session.user.id : true)
+    .filter(p => search.trim()
+      ? p.content.toLowerCase().includes(search.toLowerCase())
+      : true
+    )
 
   if (openPost) {
     return (
@@ -127,27 +139,32 @@ export default function Feed({ session, profile, activeCircle }) {
 
   return (
     <div style={{
-  flex:1, background:T.plum,
-  display:'flex', flexDirection:'column',
-  fontFamily:"'DM Sans', sans-serif"
-      }}>
+      flex:1, background:T.plum,
+      display:'flex', flexDirection:'column',
+      fontFamily:"'DM Sans', sans-serif",
+    }}>
 
-
-      {/* Circle bar + My Posts toggle */}
+      {/* ── TOP BAR: circle label + My Posts toggle ── */}
       <div style={{
         padding:'8px 16px',
         background:'rgba(11,123,130,0.08)',
         borderBottom:'1px solid rgba(11,123,130,0.15)',
-        display:'flex', alignItems:'center', justifyContent:'space-between'
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        flexShrink:0,
       }}>
-        <div style={{ fontSize:12, color:T.tealLt, display:'flex', alignItems:'center', gap:6 }}>
+        <div style={{
+          fontSize:12, color:T.tealLt,
+          display:'flex', alignItems:'center', gap:6
+        }}>
           {activeCircle && (
             <>
               <span aria-hidden="true">{activeCircle.icon}</span>
               <span style={{ fontWeight:600 }}>{activeCircle.label}</span>
             </>
           )}
-          <span style={{ color:'rgba(255,255,255,0.2)' }}>· {filtered.length} posts</span>
+          <span style={{ color:'rgba(255,255,255,0.2)' }}>
+            · {filtered.length} post{filtered.length !== 1 ? 's' : ''}
+          </span>
         </div>
         <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
           <div
@@ -162,55 +179,10 @@ export default function Feed({ session, profile, activeCircle }) {
               background: myPostsOnly ? T.ember : 'rgba(255,255,255,0.15)',
               position:'relative', transition:'all 0.2s', cursor:'pointer'
             }}>
-            {/* Search */}
-<div style={{
-  padding:'8px 16px',
-  borderBottom:'1px solid rgba(255,255,255,0.07)',
-  flexShrink:0,
-}}>
-  <div style={{
-    display:'flex', alignItems:'center', gap:8,
-    background:'rgba(255,255,255,0.06)',
-    borderRadius:10, padding:'8px 12px',
-    border:'1px solid rgba(255,255,255,0.1)',
-  }}>
-    <span style={{ fontSize:14, opacity:0.4 }} aria-hidden="true">🔍</span>
-    <input
-      type="search"
-      value={search}
-      onChange={e => setSearch(e.target.value)}
-      placeholder="Search posts..."
-      aria-label="Search posts"
-      style={{
-        flex:1, background:'none', border:'none', outline:'none',
-        color:'white', fontFamily:"'DM Sans', sans-serif",
-        fontSize:13,
-      }}
-    />
-    {search && (
-      <button
-        onClick={() => setSearch('')}
-        aria-label="Clear search"
-        style={{
-          background:'none', border:'none', color:'rgba(255,255,255,0.4)',
-          cursor:'pointer', fontSize:14, padding:0,
-        }}>
-        ✕
-      </button>
-    )}
-  </div>
-  {search && (
-    <div style={{
-      fontSize:11, color:'rgba(255,255,255,0.3)',
-      marginTop:6, paddingLeft:2
-    }}>
-      {filtered.length} result{filtered.length !== 1 ? 's' : ''} for "{search}"
-    </div>
-  )}
-</div>
             <div style={{
               position:'absolute', width:12, height:12, borderRadius:'50%',
-              background:'white', top:2, left: myPostsOnly ? 14 : 2, transition:'all 0.2s'
+              background:'white', top:2,
+              left: myPostsOnly ? 14 : 2, transition:'all 0.2s'
             }} />
           </div>
           <span style={{
@@ -223,16 +195,61 @@ export default function Feed({ session, profile, activeCircle }) {
         </label>
       </div>
 
-      {/* Compose */}
+      {/* ── SEARCH BAR ── */}
+      <div style={{
+        padding:'10px 16px',
+        borderBottom:'1px solid rgba(255,255,255,0.07)',
+        flexShrink:0,
+      }}>
+        <div style={{
+          display:'flex', alignItems:'center', gap:8,
+          background:'rgba(255,255,255,0.06)',
+          borderRadius:10, padding:'8px 12px',
+          border:'1px solid rgba(255,255,255,0.1)',
+        }}>
+          <span style={{ fontSize:14, opacity:0.4 }} aria-hidden="true">🔍</span>
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={`Search in ${activeCircle?.label || 'this circle'}...`}
+            aria-label="Search posts"
+            style={{
+              flex:1, background:'none', border:'none', outline:'none',
+              color:'white', fontFamily:"'DM Sans', sans-serif", fontSize:13,
+            }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+              style={{
+                background:'none', border:'none',
+                color:'rgba(255,255,255,0.4)',
+                cursor:'pointer', fontSize:14, padding:0,
+              }}>
+              ✕
+            </button>
+          )}
+        </div>
+        {search.trim() && (
+          <div style={{
+            fontSize:11, color:'rgba(255,255,255,0.3)',
+            marginTop:6, paddingLeft:2
+          }}>
+            {filtered.length} result{filtered.length !== 1 ? 's' : ''} for "{search}"
+          </div>
+        )}
+      </div>
+
+      {/* ── COMPOSE ── */}
       <div style={{
         margin:'12px 16px',
         background:'rgba(255,255,255,0.05)',
         borderRadius:14, padding:'12px 14px',
-        border:'1px solid rgba(255,255,255,0.1)', flexShrink:0
+        border:'1px solid rgba(255,255,255,0.1)',
+        flexShrink:0,
       }}>
-        <label htmlFor="compose-input" className="sr-only" style={{ position:'absolute', width:1, height:1, overflow:'hidden' }}>
-          Share with your circle
-        </label>
         <textarea
           id="compose-input"
           value={text}
@@ -243,10 +260,13 @@ export default function Feed({ session, profile, activeCircle }) {
           style={{
             width:'100%', background:'none', border:'none', outline:'none',
             color:'white', fontFamily:"'DM Sans', sans-serif",
-            fontSize:13, lineHeight:1.6, resize:'none', boxSizing:'border-box'
+            fontSize:13, lineHeight:1.6, resize:'none', boxSizing:'border-box',
           }}
         />
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8 }}>
+        <div style={{
+          display:'flex', alignItems:'center',
+          justifyContent:'space-between', marginTop:8
+        }}>
           <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
             <div
               role="switch"
@@ -262,7 +282,8 @@ export default function Feed({ session, profile, activeCircle }) {
               }}>
               <div style={{
                 position:'absolute', width:12, height:12, borderRadius:'50%',
-                background:'white', top:2, left: anon ? 14 : 2, transition:'all 0.2s'
+                background:'white', top:2,
+                left: anon ? 14 : 2, transition:'all 0.2s'
               }} />
             </div>
             <span style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>
@@ -278,15 +299,18 @@ export default function Feed({ session, profile, activeCircle }) {
               border:'none', borderRadius:8, padding:'7px 16px',
               fontSize:12, fontWeight:700, color:'white',
               cursor: text.trim() ? 'pointer' : 'default',
-              fontFamily:"'DM Sans', sans-serif", transition:'all 0.15s'
+              fontFamily:"'DM Sans', sans-serif", transition:'all 0.15s',
             }}>
             {posting ? 'Posting...' : 'Post'}
           </button>
         </div>
       </div>
 
-      {/* Posts */}
-      <main style={{ flex:1, overflowY:'auto', padding:'0 16px 20px' }} aria-label="Posts feed">
+      {/* ── POSTS ── */}
+      <main
+        style={{ flex:1, overflowY:'auto', padding:'0 16px 20px' }}
+        aria-label="Posts feed"
+      >
         {filtered.length === 0 && (
           <div style={{
             textAlign:'center', padding:'48px 20px',
@@ -294,8 +318,16 @@ export default function Feed({ session, profile, activeCircle }) {
           }}
             role="status"
           >
-            {myPostsOnly ? "You haven't posted here yet." : 'No posts yet.'}<br/>
-            <span style={{ color:T.tealLt }}>Be the first to share 🤍</span>
+            {search.trim()
+              ? `No posts matching "${search}"`
+              : myPostsOnly
+                ? "You haven't posted here yet."
+                : `No posts in ${activeCircle?.label || 'this circle'} yet.`
+            }
+            <br/>
+            {!search.trim() && (
+              <span style={{ color:T.tealLt }}>Be the first to share 🤍</span>
+            )}
           </div>
         )}
 
@@ -309,49 +341,56 @@ export default function Feed({ session, profile, activeCircle }) {
               onKeyDown={e => e.key === 'Enter' && setOpenPost(post)}
               aria-label={`Post by ${post.is_anonymous ? 'Anonymous' : (post.profiles?.display_name || 'Caregiver')}. ${post.content.slice(0,60)}. ${replyCount} replies.`}
               style={{
-                background:'rgba(255,255,255,0.04)', borderRadius:14, padding:'14px',
-                marginBottom:10, border:'1px solid rgba(255,255,255,0.07)',
+                background:'rgba(255,255,255,0.04)',
+                borderRadius:14, padding:'14px', marginBottom:10,
+                border:'1px solid rgba(255,255,255,0.07)',
                 cursor:'pointer', transition:'background 0.15s', outline:'none',
               }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-                <div
-                  aria-hidden="true"
-                  style={{
-                    width:32, height:32, borderRadius:'50%',
-                    background: post.is_anonymous ? T.gray : (post.profiles?.avatar_color || T.teal),
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    fontSize:13, fontWeight:700, color:'white', flexShrink:0
-                  }}>
-                  {post.is_anonymous ? '?' : (post.profiles?.display_name || 'U')[0].toUpperCase()}
+
+              {/* Post header */}
+              <div style={{
+                display:'flex', alignItems:'center', gap:8, marginBottom:10
+              }}>
+                <div aria-hidden="true" style={{
+                  width:32, height:32, borderRadius:'50%', flexShrink:0,
+                  background: post.is_anonymous
+                    ? T.gray
+                    : (post.profiles?.avatar_color || T.teal),
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:13, fontWeight:700, color:'white',
+                }}>
+                  {post.is_anonymous
+                    ? '?'
+                    : (post.profiles?.display_name || 'U')[0].toUpperCase()}
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:12, fontWeight:600, color:'white' }}>
-                    {post.is_anonymous ? 'Anonymous' : (post.profiles?.display_name || 'Caregiver')}
+                    {post.is_anonymous
+                      ? 'Anonymous'
+                      : (post.profiles?.display_name || 'Caregiver')}
                   </div>
                   <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)' }}>
                     {timeAgo(post.created_at)}
                   </div>
                 </div>
-                {post.circles && (
-                  <span style={{
-                    background:`${T.teal}22`, color:T.tealLt,
-                    fontSize:10, fontWeight:700,
-                    padding:'3px 8px', borderRadius:20,
-                    border:`1px solid ${T.teal}44`
-                  }}>
-                    {post.circles.icon} {post.circles.name}
-                  </span>
-                )}
               </div>
 
+              {/* Post content — highlight search match */}
               <p style={{
                 fontSize:13, color:'rgba(255,255,255,0.78)',
-                lineHeight:1.65, margin:'0 0 10px'
+                lineHeight:1.65, margin:'0 0 10px',
               }}>
-                {post.content}
+                {search.trim()
+                  ? post.content.split(new RegExp(`(${search})`, 'gi')).map((part, i) =>
+                      part.toLowerCase() === search.toLowerCase()
+                        ? <mark key={i} style={{ background:T.teal, color:'white', borderRadius:2, padding:'0 2px' }}>{part}</mark>
+                        : part
+                    )
+                  : post.content
+                }
               </p>
 
-              {/* Reply count */}
+              {/* Footer: reply count */}
               <div style={{
                 display:'flex', alignItems:'center', gap:12,
                 fontSize:12, color:'rgba(255,255,255,0.3)'

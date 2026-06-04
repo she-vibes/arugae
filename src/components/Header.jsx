@@ -6,7 +6,7 @@ const T = {
   ember:'#C4622D', parchment:'#FAF3EC', gray:'#94A3B8'
 }
 
-export default function Header({ profile, activeCircle, onChangeCircle, onSwitchCircle }) {
+export default function Header({ profile, activeCircle, onManageCircles }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   async function handleSignOut() {
@@ -21,7 +21,6 @@ export default function Header({ profile, activeCircle, onChangeCircle, onSwitch
         display:'flex', alignItems:'center', justifyContent:'space-between',
         background:'#1E0E3E', position:'sticky', top:0, zIndex:30, flexShrink:0
       }}>
-        {/* Logo */}
         <div>
           <div style={{
             fontFamily:'Georgia, serif', fontSize:18,
@@ -36,7 +35,6 @@ export default function Header({ profile, activeCircle, onChangeCircle, onSwitch
           )}
         </div>
 
-        {/* Profile icon */}
         <div style={{ position:'relative' }}>
           <div
             onClick={() => setMenuOpen(!menuOpen)}
@@ -72,31 +70,19 @@ export default function Header({ profile, activeCircle, onChangeCircle, onSwitch
                 </div>
               </div>
 
-              {/* Switch circle */}
-              {onSwitchCircle && (
-                <div
-                  onClick={() => { onSwitchCircle(); setMenuOpen(false) }}
-                  style={{
-                    padding:'12px 16px', fontSize:13, color:'white',
-                    cursor:'pointer', display:'flex', alignItems:'center', gap:10,
-                    borderBottom:'1px solid rgba(255,255,255,0.07)'
-                  }}>
-                  <span>🔀</span> Switch Circle
-                </div>
-              )}
-
-              {/* Manage circles */}
-              {onChangeCircle && (
-                <div
-                  onClick={() => { onChangeCircle(); setMenuOpen(false) }}
-                  style={{
-                    padding:'12px 16px', fontSize:13, color:'white',
-                    cursor:'pointer', display:'flex', alignItems:'center', gap:10,
-                    borderBottom:'1px solid rgba(255,255,255,0.07)'
-                  }}>
-                  <span>⭕</span> Manage Circles
-                </div>
-              )}
+              {/* Manage circles — always shown */}
+              <div
+                onClick={() => {
+                  if (onManageCircles) onManageCircles()
+                  setMenuOpen(false)
+                }}
+                style={{
+                  padding:'12px 16px', fontSize:13, color:'white',
+                  cursor:'pointer', display:'flex', alignItems:'center', gap:10,
+                  borderBottom:'1px solid rgba(255,255,255,0.07)'
+                }}>
+                <span>⭕</span> Manage Circles
+              </div>
 
               {/* Sign out */}
               <div

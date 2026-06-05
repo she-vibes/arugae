@@ -82,7 +82,9 @@ export default function Feed({ session, profile, activeCircle, onBack }) {
       .limit(30)
 
     if (error) { console.error('fetchPosts error:', error); return }
-    if (!data) return
+console.log('fetchPosts result:', data?.length, 'posts for circle_id:', cid)
+if (!data) return
+
 
     setPosts(data)
 
@@ -386,7 +388,18 @@ export default function Feed({ session, profile, activeCircle, onBack }) {
 
       {/* Posts */}
       <div style={{ padding: '12px 16px 20px' }}>
-        {filtered.length === 0 && (
+      {filtered.length === 0 && (
+  <div style={{
+    textAlign: 'center', padding: '40px 20px',
+    color: 'rgba(255,255,255,0.5)', fontSize: 13, lineHeight: 1.8,
+  }}>
+    Debug: posts state has {posts.length} items<br/>
+    circleDbId: {circleDbId.current || 'null'}<br/>
+    activeCircle: {activeCircle?.id || 'none'}<br/>
+    <span style={{ color: '#12A8B0' }}>filtered: {filtered.length}</span>
+  </div>
+)}
+
           <div style={{
             textAlign: 'center', padding: '40px 20px',
             color: 'rgba(255,255,255,0.2)', fontSize: 13, lineHeight: 1.8,

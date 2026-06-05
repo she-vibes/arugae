@@ -37,8 +37,15 @@ export default function SignUp() {
             fontWeight: 900, color: T.parchment, letterSpacing: '-0.02em',
           }}>arugae</div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginTop: 4 }}>
-            அருகே
-          </div>
+  அருகே
+</div>
+<div style={{
+  fontSize: 13, color: T.tealLt,
+  letterSpacing: '0.08em', marginTop: 6,
+  fontStyle: 'italic', fontFamily: 'Georgia, serif',
+}}>
+  Beside You, Always.
+</div>
         </div>
 
         {/* Hero */}

@@ -141,54 +141,50 @@ export default function CircleSelector({ profile, onSelect, setProfile, session 
 
               {/* Confirm remove overlay */}
               {confirmRemove === c.id && (
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: 'rgba(30,14,62,0.97)',
-                  borderRadius: 14,
-                  border: '1.5px solid #C4622D',
-                  display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center',
-                  gap: 10, zIndex: 5, padding: 16,
-                }}>
-                  <span style={{
-                    fontSize: 13, color: 'white',
-                    fontWeight: 600, textAlign: 'center',
-                  }}>
-                    Remove {c.label} circle?
-                  </span>
-                  <p style={{
-                    fontSize: 11, color: 'rgba(255,255,255,0.4)',
-                    margin: 0, textAlign: 'center',
-                  }}>
-                    You can re-add it anytime.
-                  </p>
-                  <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                    <button
-                      onClick={() => setConfirmRemove(null)}
-                      style={{
-                        flex: 1, padding: '10px',
-                        background: 'rgba(255,255,255,0.08)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: 8, fontSize: 13, color: 'white',
-                        cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-                      }}>
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => removeCircle(c.id)}
-                      disabled={removing === c.id}
-                      style={{
-                        flex: 1, padding: '10px',
-                        background: '#C4622D', border: 'none',
-                        borderRadius: 8, fontSize: 13,
-                        fontWeight: 700, color: 'white',
-                        cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-                      }}>
-                      {removing === c.id ? 'Removing...' : 'Yes, remove'}
-                    </button>
-                  </div>
-                </div>
-              )}
+  <div style={{
+    position: 'absolute', inset: 0,
+    background: 'rgba(30,14,62,0.97)',
+    borderRadius: 14,
+    border: '1.5px solid #C4622D',
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    gap: 10, zIndex: 5, padding: 16,
+  }}>
+    <span style={{ fontSize: 20 }}>⚠️</span>
+    <span style={{ fontSize: 14, color: 'white', fontWeight: 700, textAlign: 'center' }}>
+      Delete {c.label} circle?
+    </span>
+    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: 0, textAlign: 'center' }}>
+      You will lose access to this circle's feed. You can re-add it anytime.
+    </p>
+    <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 4 }}>
+      <button
+        onClick={() => setConfirmRemove(null)}
+        style={{
+          flex: 1, padding: '10px',
+          background: 'rgba(255,255,255,0.08)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: 8, fontSize: 13, color: 'white',
+          cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+        }}>
+        Cancel
+      </button>
+      <button
+        onClick={() => removeCircle(c.id)}
+        disabled={removing === c.id}
+        style={{
+          flex: 1, padding: '10px',
+          background: '#C4622D', border: 'none',
+          borderRadius: 8, fontSize: 13, fontWeight: 700,
+          color: 'white', cursor: 'pointer',
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+        {removing === c.id ? 'Deleting...' : '🗑 Delete'}
+      </button>
+    </div>
+  </div>
+)}
+
             </div>
           ))}
         </div>

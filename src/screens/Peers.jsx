@@ -15,10 +15,19 @@ const ALL_CIRCLES = [
   { id:'other',     label:'Other',        icon:'🤍' },
 ]
 
-export default function Peers({ session, profile, activeCircle, onMessage }) {
+const DUMMY_PEERS = [
+  { id:'dummy-1', display_name:'Priya M.', avatar_color:'#0B7B82', conditions:['cancer','elderly'], location:'Chennai' },
+  { id:'dummy-2', display_name:'Rahul S.', avatar_color:'#7C3AED', conditions:['dementia'], location:'Bangalore' },
+  { id:'dummy-3', display_name:'Meena K.', avatar_color:'#C4622D', conditions:['stroke','disability'], location:'Mumbai' },
+  { id:'dummy-4', display_name:'Ananya R.', avatar_color:'#0EA5E9', conditions:['elderly'], location:'Delhi' },
+  { id:'dummy-5', display_name:'Vikram T.', avatar_color:'#059669', conditions:['cancer'], location:'Hyderabad' },
+  { id:'dummy-6', display_name:'Sunita V.', avatar_color:'#DC2626', conditions:['disability','other'], location:'Pune' },
+]
+
+export default function Peers({ session, profile, onMessage }) {
   const [peers, setPeers] = useState([])
+  const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState(activeCircle?.id || 'all')
 
   useEffect(() => {
     fetchPeers()
@@ -26,19 +35,21 @@ export default function Peers({ session, profile, activeCircle, onMessage }) {
 
   async function fetchPeers() {
     setLoading(true)
-    let query = supabase
+    const { data } = await supabase
       .from('profiles')
       .select('id, display_name, avatar_color, conditions')
       .neq('id', session.user.id)
       .not('display_name', 'is', null)
 
-    const { data } = await query
-    if (data) {
-      const filtered = filter === 'all'
-        ? data
-        : data.filter(p => p.conditions?.includes(filter))
-      setPeers(filtered)
-    }
+    // Merge real peers with dummy peers, dedup by display_name
+    const realPeers = (data || [])
+    const allPeers = [...realPeers, ...DUMMY_PEERS]
+
+    const filtered = filter === 'all'
+      ? allPeers
+      : allPeers.filter(p => p.conditions?.includes(filter))
+
+    setPeers(filtered)
     setLoading(false)
   }
 
@@ -46,7 +57,8 @@ export default function Peers({ session, profile, activeCircle, onMessage }) {
     <div style={{
       display: 'flex', flexDirection: 'column',
       minHeight: '100%', background: T.plum,
-      fontFamily: "'DM Sans', sans-serif", padding: '16px',
+      fontFamily: "'DM Sans', sans-serif",
+      padding: '16px',
     }}>
       <div style={{
         fontFamily: 'Georgia, serif', fontSize: 22,
@@ -59,9 +71,7 @@ export default function Peers({ session, profile, activeCircle, onMessage }) {
       </p>
 
       {/* Filter chips */}
-      <div style={{
-        display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16,
-      }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
         <button
           onClick={() => setFilter('all')}
           style={{
@@ -74,16 +84,13 @@ export default function Peers({ session, profile, activeCircle, onMessage }) {
           All
         </button>
         {ALL_CIRCLES.map(c => (
-          <button
-            key={c.id}
-            onClick={() => setFilter(c.id)}
-            style={{
-              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-              border: `1px solid ${filter === c.id ? T.teal : 'rgba(255,255,255,0.15)'}`,
-              background: filter === c.id ? `${T.teal}22` : 'none',
-              color: filter === c.id ? T.tealLt : 'rgba(255,255,255,0.4)',
-              cursor: 'pointer',
-            }}>
+          <button key={c.id} onClick={() => setFilter(c.id)} style={{
+            padding: '5px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+            border: `1px solid ${filter === c.id ? T.teal : 'rgba(255,255,255,0.15)'}`,
+            background: filter === c.id ? `${T.teal}22` : 'none',
+            color: filter === c.id ? T.tealLt : 'rgba(255,255,255,0.4)',
+            cursor: 'pointer',
+          }}>
             {c.icon} {c.label}
           </button>
         ))}
@@ -95,30 +102,17 @@ export default function Peers({ session, profile, activeCircle, onMessage }) {
         </div>
       )}
 
-      {!loading && peers.length === 0 && (
-        <div style={{
-          textAlign: 'center', padding: '40px 20px',
-          color: 'rgba(255,255,255,0.2)', fontSize: 13, lineHeight: 1.8,
-        }}>
-          No peers found in this circle yet.<br />
-          <span style={{ color: T.tealLt }}>Be the first to join 🤍</span>
-        </div>
-      )}
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {peers.map(peer => {
-          const sharedCircles = ALL_CIRCLES.filter(c =>
-            peer.conditions?.includes(c.id) && profile?.conditions?.includes(c.id)
-          )
+          const sharedCircles = (peer.conditions || []).filter(c => profile?.conditions?.includes(c))
           return (
             <div key={peer.id} style={{
-              background: 'rgba(255,255,255,0.04)',
-              borderRadius: 14, padding: '14px 16px',
-              border: '1px solid rgba(255,255,255,0.07)',
+              background: 'rgba(255,255,255,0.04)', borderRadius: 14,
+              padding: '14px 16px', border: '1px solid rgba(255,255,255,0.07)',
               display: 'flex', alignItems: 'center', gap: 12,
             }}>
               <div style={{
-                width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
                 background: peer.avatar_color || T.teal,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 16, fontWeight: 700, color: 'white',
@@ -128,6 +122,11 @@ export default function Peers({ session, profile, activeCircle, onMessage }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 4 }}>
                   {peer.display_name}
+                  {peer.location && (
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginLeft: 6, fontWeight: 400 }}>
+                      📍 {peer.location}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   {(peer.conditions || []).map(cid => {
@@ -145,6 +144,11 @@ export default function Peers({ session, profile, activeCircle, onMessage }) {
                       </span>
                     )
                   })}
+                  {sharedCircles.length > 0 && (
+                    <span style={{ fontSize: 10, color: T.tealLt, padding: '2px 0' }}>
+                      · {sharedCircles.length} shared
+                    </span>
+                  )}
                 </div>
               </div>
               <button

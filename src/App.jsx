@@ -38,51 +38,9 @@ export default function App() {
     setLoading(false)
   }
 
-  function handleTabChange(tabId) {
-    setActiveTab(tabId)
-  }
-
-  const BottomNav = () => (
-    <div style={{
-      background:'#1E0E3E',
-      borderTop:'1px solid rgba(255,255,255,0.07)',
-      padding:'10px 0 6px',
-      display:'flex', justifyContent:'space-around',
-      zIndex:20, flexShrink:0,
-    }}>
-      {[
-        { id:'feed',   icon:'🏠', label:'Feed' },
-        { id:'arubot', icon:'🤖', label:'AruBot' },
-        { id:'plans',  icon:'💰', label:'Plans' },
-      ].map(tab => (
-        <div
-          key={tab.id}
-          onClick={() => handleTabChange(tab.id)}
-          role="button"
-          tabIndex={0}
-          aria-label={tab.label}
-          aria-current={activeTab === tab.id ? 'page' : undefined}
-          onKeyDown={e => e.key === 'Enter' && handleTabChange(tab.id)}
-          style={{
-            display:'flex', flexDirection:'column', alignItems:'center',
-            gap:2, cursor:'pointer',
-            opacity: activeTab === tab.id ? 1 : 0.35,
-            transition:'opacity 0.15s', padding:'4px 20px',
-          }}>
-          <span style={{ fontSize:20 }}>{tab.icon}</span>
-          <span style={{
-            fontSize:9,
-            color: activeTab === tab.id ? '#12A8B0' : 'rgba(255,255,255,0.4)',
-            fontWeight: activeTab === tab.id ? 700 : 400
-          }}>{tab.label}</span>
-        </div>
-      ))}
-    </div>
-  )
-
   if (loading) return (
     <div style={{
-      minHeight:'100vh', background:'#1E0E3E',
+      height:'100dvh', background:'#1E0E3E',
       display:'flex', alignItems:'center', justifyContent:'center'
     }}>
       <div style={{
@@ -101,54 +59,95 @@ export default function App() {
   )
 
   if (!session) return <SignUp />
-
   if (!profile?.conditions?.length)
     return <Condition session={session} onDone={setProfile} />
 
-  // ── MAIN LAYOUT — used for ALL screens after login ──
+  const tabs = [
+    { id:'feed',   icon:'🏠', label:'Feed' },
+    { id:'arubot', icon:'🤖', label:'AruBot' },
+    { id:'plans',  icon:'💰', label:'Plans' },
+  ]
+
   return (
     <div style={{
-      height:'100vh', background:'#1E0E3E',
-      display:'flex', flexDirection:'column',
-      fontFamily:"'DM Sans', sans-serif",
+      height:'100dvh',
+      background:'#1E0E3E',
+      display:'flex',
+      flexDirection:'column',
+      fontFamily:"'DM Sans', 'Segoe UI', sans-serif",
+      maxWidth:480,
+      margin:'0 auto',
+      position:'relative',
       overflow:'hidden',
     }}>
+
+      {/* Header — fixed height */}
       <Header
         profile={profile}
         activeCircle={activeCircle}
-        onManageCircles={() => setActiveCircle(null)}
+        onManageCircles={() => { setActiveCircle(null); setActiveTab('feed') }}
       />
 
-      {/* Scrollable content area */}
-      <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column' }}>
-        {!activeCircle && (
-          <CircleSelector
-            profile={profile}
-            setProfile={setProfile}
-            session={session}
-            onSelect={setActiveCircle}
-          />
+      {/* Content area — scrollable, fills space between header and nav */}
+      <div style={{ flex:1, overflowY:'auto', overflowX:'hidden', WebkitOverflowScrolling:'touch' }}>
+
+        {/* Feed tab */}
+        {activeTab === 'feed' && (
+          activeCircle
+            ? <Feed session={session} profile={profile} activeCircle={activeCircle} />
+            : <CircleSelector
+                profile={profile}
+                setProfile={setProfile}
+                session={session}
+                onSelect={(circle) => { setActiveCircle(circle); setActiveTab('feed') }}
+              />
         )}
 
-        {activeCircle && activeTab === 'feed' && (
-          <Feed
-            session={session}
-            profile={profile}
-            activeCircle={activeCircle}
-          />
-        )}
-
-        {activeCircle && activeTab === 'arubot' && (
+        {/* AruBot — always accessible */}
+        {activeTab === 'arubot' && (
           <AruBot session={session} profile={profile} />
         )}
 
-        {activeCircle && activeTab === 'plans' && (
+        {/* Plans — always accessible */}
+        {activeTab === 'plans' && (
           <Plans />
         )}
       </div>
 
-      {/* Bottom nav — always visible */}
-      <BottomNav />
+      {/* Bottom nav — fixed height */}
+      <nav
+        aria-label="Main navigation"
+        style={{
+          background:'#1E0E3E',
+          borderTop:'1px solid rgba(255,255,255,0.08)',
+          display:'flex',
+          justifyContent:'space-around',
+          padding:'8px 0 max(8px, env(safe-area-inset-bottom))',
+          flexShrink:0,
+          zIndex:20,
+        }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            aria-label={tab.label}
+            aria-current={activeTab === tab.id ? 'page' : undefined}
+            style={{
+              flex:1, background:'none', border:'none',
+              display:'flex', flexDirection:'column', alignItems:'center',
+              gap:2, cursor:'pointer', padding:'4px 0',
+              opacity: activeTab === tab.id ? 1 : 0.35,
+              transition:'opacity 0.15s',
+            }}>
+            <span style={{ fontSize:22 }} aria-hidden="true">{tab.icon}</span>
+            <span style={{
+              fontSize:10,
+              color: activeTab === tab.id ? '#12A8B0' : 'rgba(255,255,255,0.4)',
+              fontWeight: activeTab === tab.id ? 700 : 400,
+            }}>{tab.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

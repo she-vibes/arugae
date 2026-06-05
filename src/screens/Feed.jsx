@@ -30,36 +30,48 @@ export default function Feed({ session, profile, activeCircle, onBack }) {
   const realtimeChannel = useRef(null)
 
   useEffect(() => {
-    setPosts([])
-    setReplyCounts({})
-    setSearch('')
-    setMyPostsOnly(false)
-    setOpenPost(null)
-    circleDbId.current = null
+  setPosts([])
+  setReplyCounts({})
+  setSearch('')
+  setMyPostsOnly(false)
+  setOpenPost(null)
+  circleDbId.current = null
 
-    if (!activeCircle?.id) return
+  if (!activeCircle?.id) return
 
-    supabase
-      .from('circles')
-      .select('id')
-      .eq('slug', activeCircle.id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.error('Circle lookup failed:', activeCircle.id, error)
-          return
-        }
-        circleDbId.current = data.id
-        fetchPosts(data.id)
-        setupRealtime(data.id)
-      })
+  const slugMap = {
+    cancer: 'cancer',
+    dementia: 'dementia',
+    stroke: 'stroke',
+    disability: 'disability',
+    elderly: 'elderly',
+    other: 'other',
+  }
 
-    return () => {
-      if (realtimeChannel.current) {
-        supabase.removeChannel(realtimeChannel.current)
+  const slug = slugMap[activeCircle.id] || activeCircle.id
+
+  supabase
+    .from('circles')
+    .select('id')
+    .eq('slug', slug)
+    .single()
+    .then(({ data, error }) => {
+      if (error || !data) {
+        console.error('Circle lookup failed for slug:', slug, error)
+        return
       }
+      circleDbId.current = data.id
+      fetchPosts(data.id)
+      setupRealtime(data.id)
+    })
+
+  return () => {
+    if (realtimeChannel.current) {
+      supabase.removeChannel(realtimeChannel.current)
     }
-  }, [activeCircle])
+  }
+}, [activeCircle?.id]) // 👈 key fix — was [activeCircle], now [activeCircle?.id]
+
 
   async function fetchPosts(cid) {
     const { data, error } = await supabase

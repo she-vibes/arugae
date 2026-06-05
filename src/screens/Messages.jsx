@@ -107,7 +107,7 @@ export default function Messages({ session, profile, initialPeer }) {
     let { data: conv } = await supabase
       .from('conversations')
       .select('id')
-      .or(`and(participant_a.eq.${session.user.id},participant_b.eq.${peer.id}),and(participant_a.eq.${peer.id},participant_b.eq.${session.user.id})`)
+      .or(`and(participant_a.eq.${session.user.id},participant_b.eq.${peer.id}),and(participant_a.eq.${peer.id},participant_b.eq.${session.user.id}`)
       .single()
 
     if (!conv) {

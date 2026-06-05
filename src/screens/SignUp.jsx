@@ -22,42 +22,34 @@ export default function SignUp() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: T.plum,
+      minHeight: '100dvh', background: T.plum,
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       padding: '24px', fontFamily: "'DM Sans', sans-serif",
+      boxSizing: 'border-box',
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
 
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{
             fontFamily: 'Georgia, serif', fontSize: 36,
             fontWeight: 900, color: T.parchment, letterSpacing: '-0.02em',
-          }}>
-            arugae
-          </div>
-          <div style={{
-            fontSize: 12, color: 'rgba(255,255,255,0.3)',
-            letterSpacing: '0.1em', marginTop: 4,
-          }}>
+          }}>arugae</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginTop: 4 }}>
             அருகே
           </div>
         </div>
 
-        {/* Hero text */}
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        {/* Hero */}
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <h1 style={{
-            fontFamily: 'Georgia, serif', fontSize: 26,
-            fontWeight: 900, color: T.parchment,
-            lineHeight: 1.3, margin: '0 0 8px',
+            fontFamily: 'Georgia, serif', fontSize: 24,
+            fontWeight: 900, color: T.parchment, lineHeight: 1.3, margin: '0 0 8px',
           }}>
             Come home. Be heard.
           </h1>
-          <p style={{
-            fontSize: 14, color: 'rgba(255,255,255,0.55)',
-            lineHeight: 1.7, margin: 0,
-          }}>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, margin: 0 }}>
             A listening space for caregivers.<br />
             Judgement free. Anonymous whenever you need.
           </p>
@@ -67,31 +59,36 @@ export default function SignUp() {
         <div style={{
           background: 'rgba(11,123,130,0.12)',
           border: '1px solid rgba(11,123,130,0.3)',
-          borderRadius: 14, padding: '20px',
-          marginBottom: 28,
+          borderRadius: 14, padding: '18px', marginBottom: 20,
         }}>
-          <p style={{
-            fontSize: 13, color: 'rgba(255,255,255,0.7)',
-            lineHeight: 1.75, margin: '0 0 16px',
-          }}>
+          <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.65)', lineHeight: 1.75, margin: '0 0 14px' }}>
             Welcome home. This is your safe space to step out of the caregiver role and simply exist as yourself. Caregiving is beautiful, but it can also be exhausting, overwhelming, and deeply isolating. Here, you do not have to hold it all together. You are allowed to be tired, frustrated, or uncertain without any judgment.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              { icon: '🫂', label: 'Total anonymity', desc: 'Share your deepest thoughts without revealing your name.' },
-              { icon: '🤍', label: 'Zero judgment', desc: 'Every emotion you feel is valid and safe to express here.' },
-              { icon: '👂', label: 'Active listening', desc: 'Your voice, your struggles, and your wins matter.' },
-              { icon: '🌿', label: 'Unconditional support', desc: 'You care for others; let this space care for you.' },
-            ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{item.icon}</span>
-                <div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T.tealLt }}>{item.label}: </span>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{item.desc}</span>
-                </div>
+          {[
+            { icon: '🫂', label: 'Total anonymity', desc: 'Share your deepest thoughts without revealing your name.' },
+            { icon: '🤍', label: 'Zero judgment', desc: 'Every emotion you feel is valid and safe to express here.' },
+            { icon: '👂', label: 'Active listening', desc: 'Your voice, your struggles, and your wins matter.' },
+            { icon: '🌿', label: 'Unconditional support', desc: 'You care for others; let this space care for you.' },
+          ].map((item, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+              <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{item.icon}</span>
+              <div>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.tealLt }}>{item.label}: </span>
+                <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.45)' }}>{item.desc}</span>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Security note */}
+        <div style={{
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 10, padding: '12px 14px', marginBottom: 20,
+          fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, textAlign: 'center',
+        }}>
+          🔒 Login securely to view your messages, chats and save contacts.
+          Your data is private and never shared.
         </div>
 
         {/* Google button */}
@@ -99,13 +96,10 @@ export default function SignUp() {
           onClick={handleGoogle}
           disabled={loading}
           style={{
-            width: '100%', padding: '14px',
-            background: 'white', color: T.plum,
-            border: 'none', borderRadius: 10,
-            fontSize: 14, fontWeight: 700, cursor: 'pointer',
-            fontFamily: "'DM Sans', sans-serif",
-            display: 'flex', alignItems: 'center',
-            justifyContent: 'center', gap: 10,
+            width: '100%', padding: '14px', background: 'white', color: T.plum,
+            border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700,
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
             boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
           }}>
           <svg width="18" height="18" viewBox="0 0 48 48">
@@ -118,17 +112,8 @@ export default function SignUp() {
         </button>
 
         {error && (
-          <div style={{ fontSize: 12, color: '#F87171', textAlign: 'center', marginTop: 12 }}>
-            {error}
-          </div>
+          <div style={{ fontSize: 12, color: '#F87171', textAlign: 'center', marginTop: 12 }}>{error}</div>
         )}
-
-        <p style={{
-          fontSize: 11, color: 'rgba(255,255,255,0.2)',
-          textAlign: 'center', marginTop: 16,
-        }}>
-          🔒 Your data stays private and secure
-        </p>
       </div>
     </div>
   )

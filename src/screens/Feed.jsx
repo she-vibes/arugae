@@ -24,67 +24,46 @@ export default function Feed({ session, profile, activeCircle }) {
   const [myPostsOnly, setMyPostsOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [openPost, setOpenPost] = useState(null)
-  const circleIdRef = useRef(null)
+  const [circleDbId, setCircleDbId] = useState(null)
 
   useEffect(() => {
     setPosts([])
     setReplyCounts({})
     setSearch('')
     setMyPostsOnly(false)
+    setOpenPost(null)
     loadCircleAndPosts()
-
-    const channel = supabase
-      .channel('arugae-feed-' + (activeCircle?.id || 'all'))
-      .on('postgres_changes',
-        { event:'INSERT', schema:'public', table:'posts' },
-        async payload => {
-          // Only add if belongs to current circle
-          if (circleIdRef.current && payload.new.circle_id !== circleIdRef.current) return
-          const { data } = await supabase
-            .from('posts')
-            .select('*, circles(name, icon), profiles(display_name, avatar_color)')
-            .eq('id', payload.new.id)
-            .single()
-          if (data) setPosts(prev => [data, ...prev])
-        }
-      )
-      .on('postgres_changes',
-        { event:'INSERT', schema:'public', table:'comments' },
-        payload => {
-          setReplyCounts(prev => ({
-            ...prev,
-            [payload.new.post_id]: (prev[payload.new.post_id] || 0) + 1
-          }))
-        }
-      )
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
   }, [activeCircle])
 
   async function loadCircleAndPosts() {
-    // Always resolve circle ID from slug
-    let circleId = null
-    if (activeCircle?.id) {
-      const { data: circleRow } = await supabase
-        .from('circles')
-        .select('id')
-        .eq('slug', activeCircle.id)
-        .single()
-      if (circleRow) {
-        circleId = circleRow.id
-        circleIdRef.current = circleId
-      }
+    if (!activeCircle?.id) return
+
+    // Resolve slug → numeric id
+    const { data: circleRow, error } = await supabase
+      .from('circles')
+      .select('id')
+      .eq('slug', activeCircle.id)
+      .single()
+
+    if (error || !circleRow) {
+      console.error('Circle not found:', activeCircle.id, error)
+      return
     }
 
-    if (!circleId) return // Don't load posts without a valid circle
+    const cid = circleRow.id
+    setCircleDbId(cid)
 
-    const { data } = await supabase
+    const { data, error: postsError } = await supabase
       .from('posts')
-      .select('*, circles(name, icon), profiles(display_name, avatar_color)')
-      .eq('circle_id', circleId)   // strictly filtered to this circle
+      .select('*, circles(name, icon, slug), profiles(display_name, avatar_color)')
+      .eq('circle_id', cid)
       .order('created_at', { ascending:false })
       .limit(30)
+
+    if (postsError) {
+      console.error('Posts fetch error:', postsError)
+      return
+    }
 
     if (data) {
       setPosts(data)
@@ -105,20 +84,51 @@ export default function Feed({ session, profile, activeCircle }) {
     }
   }
 
+  useEffect(() => {
+    if (!activeCircle?.id) return
+
+    const channel = supabase
+      .channel('feed-' + activeCircle.id)
+      .on('postgres_changes',
+        { event:'INSERT', schema:'public', table:'posts' },
+        async payload => {
+          if (circleDbId && payload.new.circle_id !== circleDbId) return
+          const { data } = await supabase
+            .from('posts')
+            .select('*, circles(name, icon, slug), profiles(display_name, avatar_color)')
+            .eq('id', payload.new.id)
+            .single()
+          if (data) setPosts(prev => [data, ...prev])
+        }
+      )
+      .on('postgres_changes',
+        { event:'INSERT', schema:'public', table:'comments' },
+        payload => {
+          setReplyCounts(prev => ({
+            ...prev,
+            [payload.new.post_id]: (prev[payload.new.post_id] || 0) + 1
+          }))
+        }
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [activeCircle, circleDbId])
+
   async function submitPost() {
-    if (!text.trim()) return
+    if (!text.trim() || !circleDbId) return
     setPosting(true)
-    await supabase.from('posts').insert({
+    const { error } = await supabase.from('posts').insert({
       author_id: anon ? null : session.user.id,
-      circle_id: circleIdRef.current,
+      circle_id: circleDbId,
       content: text.trim(),
       is_anonymous: anon,
     })
+    if (error) console.error('Post error:', error)
     setText('')
     setPosting(false)
   }
 
-  // Apply filters
   const filtered = posts
     .filter(p => myPostsOnly ? p.author_id === session.user.id : true)
     .filter(p => search.trim()
@@ -139,34 +149,30 @@ export default function Feed({ session, profile, activeCircle }) {
 
   return (
     <div style={{
-      flex:1, background:T.plum,
       display:'flex', flexDirection:'column',
       fontFamily:"'DM Sans', sans-serif",
+      minHeight:'100%',
     }}>
 
-      {/* ── TOP BAR: circle label + My Posts toggle ── */}
+      {/* Circle bar + My Posts toggle */}
       <div style={{
         padding:'8px 16px',
         background:'rgba(11,123,130,0.08)',
         borderBottom:'1px solid rgba(11,123,130,0.15)',
-        display:'flex', alignItems:'center', justifyContent:'space-between',
-        flexShrink:0,
+        display:'flex', alignItems:'center',
+        justifyContent:'space-between', flexShrink:0,
       }}>
         <div style={{
           fontSize:12, color:T.tealLt,
           display:'flex', alignItems:'center', gap:6
         }}>
-          {activeCircle && (
-            <>
-              <span aria-hidden="true">{activeCircle.icon}</span>
-              <span style={{ fontWeight:600 }}>{activeCircle.label}</span>
-            </>
-          )}
+          <span aria-hidden="true">{activeCircle?.icon}</span>
+          <span style={{ fontWeight:600 }}>{activeCircle?.label}</span>
           <span style={{ color:'rgba(255,255,255,0.2)' }}>
             · {filtered.length} post{filtered.length !== 1 ? 's' : ''}
           </span>
         </div>
-        <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+        <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
           <div
             role="switch"
             aria-checked={myPostsOnly}
@@ -177,25 +183,26 @@ export default function Feed({ session, profile, activeCircle }) {
             style={{
               width:28, height:16, borderRadius:8,
               background: myPostsOnly ? T.ember : 'rgba(255,255,255,0.15)',
-              position:'relative', transition:'all 0.2s', cursor:'pointer'
+              position:'relative', transition:'all 0.2s', cursor:'pointer',
+              flexShrink:0,
             }}>
             <div style={{
-              position:'absolute', width:12, height:12, borderRadius:'50%',
-              background:'white', top:2,
-              left: myPostsOnly ? 14 : 2, transition:'all 0.2s'
+              position:'absolute', width:12, height:12,
+              borderRadius:'50%', background:'white',
+              top:2, left: myPostsOnly ? 14 : 2, transition:'all 0.2s'
             }} />
           </div>
           <span style={{
-            fontSize:11,
+            fontSize:11, whiteSpace:'nowrap',
             color: myPostsOnly ? T.sunrise : 'rgba(255,255,255,0.4)',
-            fontWeight: myPostsOnly ? 600 : 400
+            fontWeight: myPostsOnly ? 600 : 400,
           }}>
             My posts
           </span>
         </label>
       </div>
 
-      {/* ── SEARCH BAR ── */}
+      {/* Search */}
       <div style={{
         padding:'10px 16px',
         borderBottom:'1px solid rgba(255,255,255,0.07)',
@@ -207,7 +214,7 @@ export default function Feed({ session, profile, activeCircle }) {
           borderRadius:10, padding:'8px 12px',
           border:'1px solid rgba(255,255,255,0.1)',
         }}>
-          <span style={{ fontSize:14, opacity:0.4 }} aria-hidden="true">🔍</span>
+          <span style={{ fontSize:13, opacity:0.4 }} aria-hidden="true">🔍</span>
           <input
             type="search"
             value={search}
@@ -216,7 +223,8 @@ export default function Feed({ session, profile, activeCircle }) {
             aria-label="Search posts"
             style={{
               flex:1, background:'none', border:'none', outline:'none',
-              color:'white', fontFamily:"'DM Sans', sans-serif", fontSize:13,
+              color:'white', fontFamily:"'DM Sans', sans-serif",
+              fontSize:13, minWidth:0,
             }}
           />
           {search && (
@@ -226,7 +234,7 @@ export default function Feed({ session, profile, activeCircle }) {
               style={{
                 background:'none', border:'none',
                 color:'rgba(255,255,255,0.4)',
-                cursor:'pointer', fontSize:14, padding:0,
+                cursor:'pointer', fontSize:13, padding:0, flexShrink:0,
               }}>
               ✕
             </button>
@@ -234,27 +242,25 @@ export default function Feed({ session, profile, activeCircle }) {
         </div>
         {search.trim() && (
           <div style={{
-            fontSize:11, color:'rgba(255,255,255,0.3)',
-            marginTop:6, paddingLeft:2
+            fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:6
           }}>
             {filtered.length} result{filtered.length !== 1 ? 's' : ''} for "{search}"
           </div>
         )}
       </div>
 
-      {/* ── COMPOSE ── */}
+      {/* Compose */}
       <div style={{
-        margin:'12px 16px',
+        margin:'12px 16px 0',
         background:'rgba(255,255,255,0.05)',
         borderRadius:14, padding:'12px 14px',
         border:'1px solid rgba(255,255,255,0.1)',
         flexShrink:0,
       }}>
         <textarea
-          id="compose-input"
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder="Share what's on your mind..."
+          placeholder={`Share with ${activeCircle?.label || 'your circle'}...`}
           rows={2}
           aria-label="Compose a post"
           style={{
@@ -265,9 +271,9 @@ export default function Feed({ session, profile, activeCircle }) {
         />
         <div style={{
           display:'flex', alignItems:'center',
-          justifyContent:'space-between', marginTop:8
+          justifyContent:'space-between', marginTop:8, gap:8,
         }}>
-          <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+          <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', flexShrink:0 }}>
             <div
               role="switch"
               aria-checked={anon}
@@ -278,43 +284,41 @@ export default function Feed({ session, profile, activeCircle }) {
               style={{
                 width:28, height:16, borderRadius:8,
                 background: anon ? T.teal : 'rgba(255,255,255,0.15)',
-                position:'relative', transition:'all 0.2s', cursor:'pointer'
+                position:'relative', transition:'all 0.2s', cursor:'pointer',
               }}>
               <div style={{
-                position:'absolute', width:12, height:12, borderRadius:'50%',
-                background:'white', top:2,
-                left: anon ? 14 : 2, transition:'all 0.2s'
+                position:'absolute', width:12, height:12,
+                borderRadius:'50%', background:'white',
+                top:2, left: anon ? 14 : 2, transition:'all 0.2s'
               }} />
             </div>
-            <span style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>
-              Post anonymously
+            <span style={{ fontSize:11, color:'rgba(255,255,255,0.5)', whiteSpace:'nowrap' }}>
+              Anonymous
             </span>
           </label>
           <button
             onClick={submitPost}
-            disabled={!text.trim() || posting}
+            disabled={!text.trim() || posting || !circleDbId}
             aria-label="Submit post"
             style={{
-              background: text.trim() ? T.ember : 'rgba(255,255,255,0.1)',
+              background: text.trim() && circleDbId ? T.ember : 'rgba(255,255,255,0.1)',
               border:'none', borderRadius:8, padding:'7px 16px',
               fontSize:12, fontWeight:700, color:'white',
-              cursor: text.trim() ? 'pointer' : 'default',
+              cursor: text.trim() && circleDbId ? 'pointer' : 'default',
               fontFamily:"'DM Sans', sans-serif", transition:'all 0.15s',
+              flexShrink:0,
             }}>
             {posting ? 'Posting...' : 'Post'}
           </button>
         </div>
       </div>
 
-      {/* ── POSTS ── */}
-      <main
-        style={{ flex:1, overflowY:'auto', padding:'0 16px 20px' }}
-        aria-label="Posts feed"
-      >
+      {/* Posts list */}
+      <div style={{ padding:'12px 16px 20px' }}>
         {filtered.length === 0 && (
           <div style={{
-            textAlign:'center', padding:'48px 20px',
-            color:'rgba(255,255,255,0.2)', fontSize:13, lineHeight:1.7
+            textAlign:'center', padding:'40px 20px',
+            color:'rgba(255,255,255,0.2)', fontSize:13, lineHeight:1.8,
           }}
             role="status"
           >
@@ -322,9 +326,9 @@ export default function Feed({ session, profile, activeCircle }) {
               ? `No posts matching "${search}"`
               : myPostsOnly
                 ? "You haven't posted here yet."
-                : `No posts in ${activeCircle?.label || 'this circle'} yet.`
+                : `No posts in ${activeCircle?.label} yet.`
             }
-            <br/>
+            <br />
             {!search.trim() && (
               <span style={{ color:T.tealLt }}>Be the first to share 🤍</span>
             )}
@@ -339,32 +343,36 @@ export default function Feed({ session, profile, activeCircle }) {
               onClick={() => setOpenPost(post)}
               tabIndex={0}
               onKeyDown={e => e.key === 'Enter' && setOpenPost(post)}
-              aria-label={`Post by ${post.is_anonymous ? 'Anonymous' : (post.profiles?.display_name || 'Caregiver')}. ${post.content.slice(0,60)}. ${replyCount} replies.`}
+              aria-label={`Post by ${post.is_anonymous ? 'Anonymous' : (post.profiles?.display_name || 'Caregiver')}. ${replyCount} replies.`}
               style={{
                 background:'rgba(255,255,255,0.04)',
                 borderRadius:14, padding:'14px', marginBottom:10,
                 border:'1px solid rgba(255,255,255,0.07)',
-                cursor:'pointer', transition:'background 0.15s', outline:'none',
+                cursor:'pointer', outline:'none',
               }}>
 
-              {/* Post header */}
+              {/* Author row */}
               <div style={{
-                display:'flex', alignItems:'center', gap:8, marginBottom:10
+                display:'flex', alignItems:'center',
+                gap:8, marginBottom:10,
               }}>
                 <div aria-hidden="true" style={{
                   width:32, height:32, borderRadius:'50%', flexShrink:0,
                   background: post.is_anonymous
-                    ? T.gray
-                    : (post.profiles?.avatar_color || T.teal),
-                  display:'flex', alignItems:'center', justifyContent:'center',
+                    ? T.gray : (post.profiles?.avatar_color || T.teal),
+                  display:'flex', alignItems:'center',
+                  justifyContent:'center',
                   fontSize:13, fontWeight:700, color:'white',
                 }}>
                   {post.is_anonymous
                     ? '?'
                     : (post.profiles?.display_name || 'U')[0].toUpperCase()}
                 </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:'white' }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{
+                    fontSize:12, fontWeight:600, color:'white',
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                  }}>
                     {post.is_anonymous
                       ? 'Anonymous'
                       : (post.profiles?.display_name || 'Caregiver')}
@@ -373,36 +381,51 @@ export default function Feed({ session, profile, activeCircle }) {
                     {timeAgo(post.created_at)}
                   </div>
                 </div>
+                {/* Circle tag — always shows active circle */}
+                <span style={{
+                  background:`${T.teal}22`, color:T.tealLt,
+                  fontSize:10, fontWeight:700, flexShrink:0,
+                  padding:'3px 8px', borderRadius:20,
+                  border:`1px solid ${T.teal}44`,
+                  whiteSpace:'nowrap',
+                }}>
+                  {activeCircle?.icon} {activeCircle?.label}
+                </span>
               </div>
 
-              {/* Post content — highlight search match */}
+              {/* Content with search highlight */}
               <p style={{
                 fontSize:13, color:'rgba(255,255,255,0.78)',
-                lineHeight:1.65, margin:'0 0 10px',
+                lineHeight:1.65, margin:'0 0 10px', wordBreak:'break-word',
               }}>
                 {search.trim()
-                  ? post.content.split(new RegExp(`(${search})`, 'gi')).map((part, i) =>
-                      part.toLowerCase() === search.toLowerCase()
-                        ? <mark key={i} style={{ background:T.teal, color:'white', borderRadius:2, padding:'0 2px' }}>{part}</mark>
-                        : part
-                    )
+                  ? post.content
+                      .split(new RegExp(`(${search})`, 'gi'))
+                      .map((part, i) =>
+                        part.toLowerCase() === search.toLowerCase()
+                          ? <mark key={i} style={{
+                              background:T.teal, color:'white',
+                              borderRadius:2, padding:'0 2px'
+                            }}>{part}</mark>
+                          : part
+                      )
                   : post.content
                 }
               </p>
 
-              {/* Footer: reply count */}
+              {/* Footer */}
               <div style={{
-                display:'flex', alignItems:'center', gap:12,
-                fontSize:12, color:'rgba(255,255,255,0.3)'
+                display:'flex', alignItems:'center', gap:10,
+                fontSize:11, color:'rgba(255,255,255,0.3)',
               }}>
                 <span>💬 {replyCount} {replyCount === 1 ? 'reply' : 'replies'}</span>
-                <span style={{ color:'rgba(255,255,255,0.15)' }}>·</span>
-                <span style={{ color:T.tealLt, fontSize:11 }}>Tap to reply →</span>
+                <span>·</span>
+                <span style={{ color:T.tealLt }}>Tap to reply →</span>
               </div>
             </article>
           )
         })}
-      </main>
+      </div>
     </div>
   )
 }

@@ -26,54 +26,54 @@ export default function Feed({ session, profile, activeCircle, onBack }) {
   const [myPostsOnly, setMyPostsOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [openPost, setOpenPost] = useState(null)
+  const [loading, setLoading] = useState(true)
   const circleDbId = useRef(null)
   const realtimeChannel = useRef(null)
 
   useEffect(() => {
-  setPosts([])
-  setReplyCounts({})
-  setSearch('')
-  setMyPostsOnly(false)
-  setOpenPost(null)
-  circleDbId.current = null
+    if (!activeCircle?.id) return
 
-  if (!activeCircle?.id) return
+    // Reset state on circle change
+    setPosts([])
+    setReplyCounts({})
+    setSearch('')
+    setMyPostsOnly(false)
+    setOpenPost(null)
+    setLoading(true)
+    circleDbId.current = null
 
-  const slugMap = {
-    cancer: 'cancer',
-    dementia: 'dementia',
-    stroke: 'stroke',
-    disability: 'disability',
-    elderly: 'elderly',
-    other: 'other',
-  }
-
-  const slug = slugMap[activeCircle.id] || activeCircle.id
-
-  supabase
-    .from('circles')
-    .select('id')
-    .eq('slug', slug)
-    .single()
-    .then(({ data, error }) => {
-      if (error || !data) {
-        console.error('Circle lookup failed for slug:', slug, error)
-        return
-      }
-      circleDbId.current = data.id
-      fetchPosts(data.id)
-      setupRealtime(data.id)
-    })
-
-  return () => {
+    // Tear down previous realtime channel
     if (realtimeChannel.current) {
       supabase.removeChannel(realtimeChannel.current)
+      realtimeChannel.current = null
     }
-  }
-}, [activeCircle?.id]) // 👈 key fix — was [activeCircle], now [activeCircle?.id]
 
+    // Resolve circle slug to numeric DB id, then fetch
+    supabase
+      .from('circles')
+      .select('id')
+      .eq('slug', activeCircle.id)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.error('Circle lookup failed:', activeCircle.id, error)
+          setLoading(false)
+          return
+        }
+        circleDbId.current = data.id
+        fetchPosts(data.id)
+        setupRealtime(data.id)
+      })
+
+    return () => {
+      if (realtimeChannel.current) {
+        supabase.removeChannel(realtimeChannel.current)
+      }
+    }
+  }, [activeCircle?.id])
 
   async function fetchPosts(cid) {
+    setLoading(true)
     const { data, error } = await supabase
       .from('posts')
       .select('*, circles(name, icon, slug), profiles(display_name, avatar_color)')
@@ -81,14 +81,17 @@ export default function Feed({ session, profile, activeCircle, onBack }) {
       .order('created_at', { ascending: false })
       .limit(30)
 
-    if (error) { console.error('fetchPosts error:', error); return }
-console.log('fetchPosts result:', data?.length, 'posts for circle_id:', cid)
-if (!data) return
+    if (error) {
+      console.error('fetchPosts error:', error)
+      setLoading(false)
+      return
+    }
 
+    setPosts(data || [])
+    setLoading(false)
 
-    setPosts(data)
+    if (!data?.length) return
 
-    if (!data.length) return
     const ids = data.map(p => p.id)
     const { data: comments } = await supabase
       .from('comments')
@@ -105,11 +108,8 @@ if (!data) return
   }
 
   function setupRealtime(cid) {
-    if (realtimeChannel.current) {
-      supabase.removeChannel(realtimeChannel.current)
-    }
     realtimeChannel.current = supabase
-      .channel('feed-' + cid)
+      .channel('feed-' + cid + '-' + Date.now())
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'posts' },
         async payload => {
@@ -119,7 +119,13 @@ if (!data) return
             .select('*, circles(name, icon, slug), profiles(display_name, avatar_color)')
             .eq('id', payload.new.id)
             .single()
-          if (data) setPosts(prev => [data, ...prev])
+          if (data) {
+            setPosts(prev => {
+              // Remove any optimistic version, prepend real post
+              const withoutOptimistic = prev.filter(p => !p._optimistic)
+              return [data, ...withoutOptimistic]
+            })
+          }
         }
       )
       .on('postgres_changes',
@@ -135,14 +141,14 @@ if (!data) return
   }
 
   async function submitPost() {
-    if (!text.trim()) return
+    if (!text.trim() || !circleDbId.current) return
 
-    // Optimistic insert — show immediately
+    const optimisticId = 'opt-' + Date.now()
     const optimistic = {
-      id: 'temp-' + Date.now(),
+      id: optimisticId,
       content: text.trim(),
       link_url: linkUrl.trim() || null,
-      link_title: linkUrl.trim() ? new URL(linkUrl.trim()).hostname : null,
+      link_title: null,
       is_anonymous: anon,
       created_at: new Date().toISOString(),
       circle_id: circleDbId.current,
@@ -154,6 +160,8 @@ if (!data) return
       author_id: anon ? null : session.user.id,
       _optimistic: true,
     }
+
+    // Show immediately
     setPosts(prev => [optimistic, ...prev])
     const savedText = text.trim()
     const savedLink = linkUrl.trim()
@@ -161,12 +169,6 @@ if (!data) return
     setLinkUrl('')
     setShowLink(false)
     setPosting(true)
-
-    if (!circleDbId.current) {
-      console.error('No circle ID — waiting for lookup')
-      setPosting(false)
-      return
-    }
 
     const insertPayload = {
       author_id: anon ? null : session.user.id,
@@ -176,19 +178,25 @@ if (!data) return
     }
     if (savedLink) {
       insertPayload.link_url = savedLink
-      try {
-        insertPayload.link_title = new URL(savedLink).hostname
-      } catch {
-        insertPayload.link_title = savedLink
-      }
+      try { insertPayload.link_title = new URL(savedLink).hostname }
+      catch { insertPayload.link_title = savedLink }
     }
 
-    const { error } = await supabase.from('posts').insert(insertPayload)
+    const { data: newPost, error } = await supabase
+      .from('posts')
+      .insert(insertPayload)
+      .select('*, circles(name, icon, slug), profiles(display_name, avatar_color)')
+      .single()
+
     if (error) {
       console.error('submitPost error:', error)
-      // Remove optimistic post on failure
-      setPosts(prev => prev.filter(p => p.id !== optimistic.id))
+      // Remove failed optimistic post
+      setPosts(prev => prev.filter(p => p.id !== optimisticId))
+    } else if (newPost) {
+      // Replace optimistic with confirmed post
+      setPosts(prev => prev.map(p => p.id === optimisticId ? newPost : p))
     }
+
     setPosting(false)
   }
 
@@ -228,7 +236,8 @@ if (!data) return
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <button onClick={onBack} aria-label="Back to circles" style={{
             background: 'none', border: 'none', color: T.tealLt,
-            fontSize: 18, cursor: 'pointer', flexShrink: 0, lineHeight: 1, padding: '0 4px 0 0',
+            fontSize: 18, cursor: 'pointer', flexShrink: 0,
+            lineHeight: 1, padding: '0 4px 0 0',
           }}>←</button>
           <span style={{
             fontSize: 12, color: T.tealLt, fontWeight: 600,
@@ -237,13 +246,13 @@ if (!data) return
             {activeCircle?.icon} {activeCircle?.label}
           </span>
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>
-            · {filtered.length} post{filtered.length !== 1 ? 's' : ''}
+            · {loading ? '...' : `${filtered.length} post${filtered.length !== 1 ? 's' : ''}`}
           </span>
         </div>
+
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flexShrink: 0 }}>
           <div
-            role="switch" aria-checked={myPostsOnly}
-            tabIndex={0}
+            role="switch" aria-checked={myPostsOnly} tabIndex={0}
             onClick={() => setMyPostsOnly(!myPostsOnly)}
             onKeyDown={e => e.key === 'Enter' && setMyPostsOnly(!myPostsOnly)}
             style={{
@@ -253,17 +262,23 @@ if (!data) return
             }}>
             <div style={{
               position: 'absolute', width: 12, height: 12, borderRadius: '50%',
-              background: 'white', top: 2, left: myPostsOnly ? 14 : 2, transition: 'all 0.2s'
+              background: 'white', top: 2,
+              left: myPostsOnly ? 14 : 2, transition: 'all 0.2s'
             }} />
           </div>
-          <span style={{ fontSize: 11, whiteSpace: 'nowrap', color: myPostsOnly ? T.sunrise : 'rgba(255,255,255,0.4)' }}>
-            My posts
-          </span>
+          <span style={{
+            fontSize: 11, whiteSpace: 'nowrap',
+            color: myPostsOnly ? T.sunrise : 'rgba(255,255,255,0.4)',
+          }}>My posts</span>
         </label>
       </div>
 
       {/* Search */}
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
+      <div style={{
+        padding: '10px 16px',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        flexShrink: 0,
+      }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
           background: 'rgba(255,255,255,0.06)', borderRadius: 10,
@@ -276,12 +291,14 @@ if (!data) return
             placeholder={`Search ${activeCircle?.label || ''}...`}
             style={{
               flex: 1, background: 'none', border: 'none', outline: 'none',
-              color: 'white', fontFamily: "'DM Sans', sans-serif", fontSize: 13, minWidth: 0,
+              color: 'white', fontFamily: "'DM Sans', sans-serif",
+              fontSize: 13, minWidth: 0,
             }}
           />
           {search && (
             <button onClick={() => setSearch('')} style={{
-              background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+              background: 'none', border: 'none',
+              color: 'rgba(255,255,255,0.4)',
               cursor: 'pointer', fontSize: 13, padding: 0,
             }}>✕</button>
           )}
@@ -297,7 +314,8 @@ if (!data) return
       <div style={{
         margin: '12px 16px 0',
         background: 'rgba(255,255,255,0.05)', borderRadius: 14,
-        padding: '12px 14px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0,
+        padding: '12px 14px', border: '1px solid rgba(255,255,255,0.1)',
+        flexShrink: 0,
       }}>
         <textarea
           value={text}
@@ -310,12 +328,8 @@ if (!data) return
             fontSize: 13, lineHeight: 1.6, resize: 'none', boxSizing: 'border-box',
           }}
         />
-
-        {/* Link input */}
         {showLink && (
-          <div style={{
-            display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center',
-          }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
             <input
               value={linkUrl}
               onChange={e => setLinkUrl(e.target.value)}
@@ -329,15 +343,17 @@ if (!data) return
               }}
             />
             <button onClick={() => { setShowLink(false); setLinkUrl('') }} style={{
-              background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)',
+              background: 'none', border: 'none',
+              color: 'rgba(255,255,255,0.3)',
               cursor: 'pointer', fontSize: 13, padding: 0,
             }}>✕</button>
           </div>
         )}
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', marginTop: 8, gap: 8,
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Anonymous toggle */}
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <div
                 role="switch" aria-checked={anon} tabIndex={0}
@@ -350,16 +366,14 @@ if (!data) return
                 }}>
                 <div style={{
                   position: 'absolute', width: 12, height: 12, borderRadius: '50%',
-                  background: 'white', top: 2, left: anon ? 14 : 2, transition: 'all 0.2s'
+                  background: 'white', top: 2,
+                  left: anon ? 14 : 2, transition: 'all 0.2s'
                 }} />
               </div>
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>Anon</span>
             </label>
-
-            {/* Link toggle */}
             <button
               onClick={() => setShowLink(!showLink)}
-              title="Attach a link"
               style={{
                 background: showLink ? `${T.teal}33` : 'none',
                 border: showLink ? `1px solid ${T.teal}` : '1px solid rgba(255,255,255,0.15)',
@@ -370,7 +384,6 @@ if (!data) return
               🔗 Link
             </button>
           </div>
-
           <button
             onClick={submitPost}
             disabled={!text.trim() || posting}
@@ -379,7 +392,8 @@ if (!data) return
               border: 'none', borderRadius: 8, padding: '7px 16px',
               fontSize: 12, fontWeight: 700, color: 'white',
               cursor: text.trim() ? 'pointer' : 'default',
-              fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s', flexShrink: 0,
+              fontFamily: "'DM Sans', sans-serif",
+              transition: 'all 0.15s', flexShrink: 0,
             }}>
             {posting ? 'Posting...' : 'Post'}
           </button>
@@ -388,23 +402,23 @@ if (!data) return
 
       {/* Posts */}
       <div style={{ padding: '12px 16px 20px' }}>
-      {filtered.length === 0 && (
-  <div style={{
-    textAlign: 'center', padding: '40px 20px',
-    color: 'rgba(255,255,255,0.5)', fontSize: 13, lineHeight: 1.8,
-  }}>
-    Debug: posts state has {posts.length} items<br/>
-    circleDbId: {circleDbId.current || 'null'}<br/>
-    activeCircle: {activeCircle?.id || 'none'}<br/>
-    <span style={{ color: '#12A8B0' }}>filtered: {filtered.length}</span>
-  </div>
-)}
+        {loading && (
+          <div style={{
+            textAlign: 'center', padding: '40px',
+            color: 'rgba(255,255,255,0.2)', fontSize: 13,
+          }}>
+            Loading...
+          </div>
+        )}
 
+        {!loading && filtered.length === 0 && (
           <div style={{
             textAlign: 'center', padding: '40px 20px',
             color: 'rgba(255,255,255,0.2)', fontSize: 13, lineHeight: 1.8,
           }}>
-            {search.trim() ? `No posts matching "${search}"` : `No posts in ${activeCircle?.label} yet.`}
+            {search.trim()
+              ? `No posts matching "${search}"`
+              : `No posts in ${activeCircle?.label} yet.`}
             <br />
             {!search.trim() && <span style={{ color: T.tealLt }}>Be the first to share 🤍</span>}
           </div>
@@ -419,11 +433,13 @@ if (!data) return
               tabIndex={0}
               onKeyDown={e => e.key === 'Enter' && !post._optimistic && setOpenPost(post)}
               style={{
-                background: post._optimistic ? 'rgba(11,123,130,0.08)' : 'rgba(255,255,255,0.04)',
+                background: post._optimistic
+                  ? 'rgba(11,123,130,0.08)'
+                  : 'rgba(255,255,255,0.04)',
                 borderRadius: 14, padding: '14px', marginBottom: 10,
                 border: `1px solid ${post._optimistic ? T.teal + '44' : 'rgba(255,255,255,0.07)'}`,
-                cursor: post._optimistic ? 'default' : 'pointer', outline: 'none',
-                opacity: post._optimistic ? 0.8 : 1,
+                cursor: post._optimistic ? 'default' : 'pointer',
+                outline: 'none', opacity: post._optimistic ? 0.75 : 1,
               }}>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -449,8 +465,8 @@ if (!data) return
                 <span style={{
                   background: `${T.teal}22`, color: T.tealLt,
                   fontSize: 10, fontWeight: 700, flexShrink: 0,
-                  padding: '3px 8px', borderRadius: 20, border: `1px solid ${T.teal}44`,
-                  whiteSpace: 'nowrap',
+                  padding: '3px 8px', borderRadius: 20,
+                  border: `1px solid ${T.teal}44`, whiteSpace: 'nowrap',
                 }}>
                   {activeCircle?.icon} {activeCircle?.label}
                 </span>
@@ -470,7 +486,6 @@ if (!data) return
                 }
               </p>
 
-              {/* Link preview */}
               {post.link_url && (
                 <a
                   href={post.link_url}
@@ -495,14 +510,14 @@ if (!data) return
                 display: 'flex', alignItems: 'center', gap: 10,
                 fontSize: 11, color: 'rgba(255,255,255,0.3)',
               }}>
-                {!post._optimistic && (
-                  <>
+                {post._optimistic
+                  ? <span style={{ color: T.tealLt }}>Sending...</span>
+                  : <>
                     <span>💬 {replyCount} {replyCount === 1 ? 'reply' : 'replies'}</span>
                     <span>·</span>
                     <span style={{ color: T.tealLt }}>Tap to reply →</span>
                   </>
-                )}
-                {post._optimistic && <span style={{ color: T.tealLt }}>Posting...</span>}
+                }
               </div>
             </article>
           )

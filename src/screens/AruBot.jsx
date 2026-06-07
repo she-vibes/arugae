@@ -48,7 +48,7 @@ export default function AruBot({ profile }) {
       const reply = data.content?.[0]?.text || "I'm here. Can you tell me a little more?"
       setMessages(prev => [...prev, { role:'assistant', content: reply }])
     } catch {
-      setMessages(prev => [...prev, { role:'assistant', content:"I'm having trouble connecting right now. Please try again in a moment 🤍" }])
+      setMessages(prev => [...prev, { role:'assistant', content:"setMessages(prev => [...prev, { role:'assistant', content:"I'm a work in progress. I'll be ready soon." }])
     }
     setLoading(false)
   }
